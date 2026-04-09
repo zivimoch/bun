@@ -3,7 +3,7 @@ import { db } from "./db";
 import { users } from "./db/schema";
 import { usersRoute } from "./routes/users-route";
 
-const app = new Elysia()
+export const app = new Elysia()
   .use(usersRoute)
   .get("/", () => "Hello from Bun + Elysia + Drizzle!")
   .get("/health", async () => {
@@ -14,8 +14,9 @@ const app = new Elysia()
     } catch (e) {
       return { status: "error", message: "Database connection failed." };
     }
-  })
-  .listen(3000);
+  });
+
+app.listen(3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`

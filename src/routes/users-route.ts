@@ -43,6 +43,12 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
       }),
     }
   )
+  .onError(({ error, set }) => {
+    if (error && (error as any).message === "unauthorized") {
+      set.status = 401;
+      return { error: "unauthorized" };
+    }
+  })
   .group("", (app) =>
     app
       .derive(({ headers }) => {
