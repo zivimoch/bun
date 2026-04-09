@@ -1,74 +1,43 @@
-# Issue: Implementasi Fitur Logout User
+# Issue: Implementasi Unit Test untuk Seluruh API
 
 ## Deskripsi Tugas
-Kita perlu menambahkan fitur logout untuk mengakhiri sesi pengguna yang saat ini sedang login. Fitur ini akan menerima token sesi (UUID) melalui HTTP Header `Authorization`, lalu menghapus record session tersebut dari database sehingga token tersebut tidak dapat digunakan lagi.
+Kita membutuhkan _test coverage_ yang komprehensif untuk seluruh endpoint API yang berjalan saat ini. Pengujian ini bertujuan untuk memastikan setiap endpoint berfungsi sesuai spesifikasi, baik pada skenario sukses (Happy Path) maupun pada skenario kegagalan (Error/Edge Cases).
+
+Silakan implementasikan unit test menggunakan *test runner* bawaan dari Bun yaitu `bun test`.
 
 ---
 
-## 1. Spesifikasi API
-
-Buat endpoint API untuk melakukan proses logout user.
-
-- **Endpoint:** `DELETE /api/users/logout`
-
-**Headers Request:**
-- `Authorization`: `Bearer <token_uuid_dari_table_sessions>`
-
-**Response Body (Success 200):**
-```json
-{
-    "data" : "OK"
-}
-```
-*(Catatan: Setelah response sukses ini diberikan, pastikan record session di tabel database sudah terhapus).*
-
-**Response Body (Error - Token Tidak Valid/Tidak Ada 401):**
-```json
-{
-    "error" : "unauthorized"
-}
-```
+## Aturan Utama Pengujian
+1. **Lokasi File**: Seluruh file test harus diletakkan di dalam direktori `test/` pada root proyek (contoh: `test/users.test.ts`).
+2. **Isolasi Data (Konsistensi)**: Sebelum **setiap** skenario (atau sebelum block `describe` yang terkait), **WAJIB** membersihkan/menghapus data target di database secara terprogram (membersihkan isi tabel `users` dan `sessions`). Hal ini penting agar satu pengujian tidak diinterferensi oleh sisa data dari pengujian sebelumnya.
+3. Gunakan integrasi request dengan instance server Elysia atau langsung hit menggunakan HTTP request secara lokal ke aplikasi.
 
 ---
 
-## 2. Struktur Folder dan Penamaan File
+## Daftar Skenario Pengujian yang Harus Dibuat
 
-Kode harus diletakkan pada folder dan file yang sudah ada:
+Berikut adalah rincian skenario yang wajib Anda tulis tesnya, jangan membuat implementasi kode dari saya, melainkan wujudkan langsung *assertions* berdasarkan daftar berikut:
 
-- `src/routes`: Folder ini berisi file routing ElysiaJS.
-  - File: `users-route.ts`
-- `src/services`: Folder ini berisi logika bisnis aplikasi.
-  - File: `user-services.ts`
+### 1. Registrasi User (`POST /api/users`)
+- **[Success]** Berhasil melakukan registrasi dengan payload user yang valid (mengembalikan response `{"data": "OK"}`).
+- **[Error]** Gagal melakukan registrasi karena format body payload tidak valid (misalnya field `email` bukan format email yang benar).
+- **[Error]** Gagal melakukan registrasi karena email sudah terdaftar sebelumnya (menghasilkan status HTTP 400).
 
----
+### 2. Login User (`POST /api/users/login`)
+- **[Success]** Berhasil login menggunakan email dan password yang valid (menghasilkan token berbasis UUID, status HTTP 200).
+- **[Success]** Verifikasi Database: Pastikan token yang dikembalikan dari login tersebut berhasil masuk ke tabel `sessions` dengan relasi `user_id` yang tepat.
+- **[Error]** Gagal login karena format email atau body rekues salah.
+- **[Error]** Gagal login karena email belum didaftarkan di sistem (status 401).
+- **[Error]** Gagal login karena pengguna memberikan kombinasi password yang salah (status 401).
 
-## 3. Tahapan Implementasi (Step-by-Step)
+### 3. Get Current User Profil (`POST /api/users/current`)
+- **[Success]** Berhasil membaca data profil pengguna dengan memasukkan Authorization header Bearer token yang valid (response mengandung `id`, `name`, `email`, dan `createdAt`, tetapi **HARUS dipastikan kolom `password` tidak bocor**).
+- **[Error]** Akses ditolak jika tidak membawa header `Authorization` sama sekali (status 401).
+- **[Error]** Akses ditolak karena Bearer token berformat salah atau menggunakan token sembarang/invalid (status 401).
+- **[Error]** Akses ditolak jika menggunakan string yang tampak seperti token UUID tetapi record-nya tidak dapat ditemukan/sudah tidak valid di tabel `sessions`.
 
-Untuk mengimplementasikan fitur ini, ikuti langkah-langkah berurutan berikut:
-
-### Langkah 1: Buat Logic Logout di Service (`src/services/user-services.ts`)
-1. Buka file `src/services/user-services.ts`.
-2. Buat fungsi baru, misalnya `logoutUser(token: string)`. Fungsi ini wajib bersifat async.
-3. Di dalam fungsi tersebut, hubungkan ke tabel `sessions` menggunakan Drizzle ORM.
-4. Pertama, cek apakah token ada di database. Anda bisa menggunakan `db.query.sessions.findFirst`. Jika tidak ada, lempar error: `throw new Error("unauthorized")`.
-5. Jika ada, lakukan penghapusan token tersebut dari tabel `sessions` menggunakan perintah delete Drizzle, misal: `await db.delete(sessions).where(eq(sessions.token, token))`.
-6. Kembalikan (return) string `"OK"` yang menandakan penghapusan sukses.
-
-### Langkah 2: Buat Route Handler & Ekstraksi Token (`src/routes/users-route.ts`)
-1. Buka file `users-route.ts`.
-2. Pada instance route utama Elysia (`/api/users`), tambahkan metode handler `DELETE` untuk endpoint `/logout`. Contoh: `.delete("/logout", async ({ headers, set }) => { ... })`.
-3. Ambil isi dari header `Authorization` (`headers.authorization`). Elysia melempar header strings menjadi format huruf kecil secara default.
-4. Lakukan validasi:
-   - Jika header `authorization` tidak ada, segera lempar peringatan error atau kembalikan response objek error yang akan ditangkap di `catch`.
-   - Pastikan header yang dikirim berformat `"Bearer <token>"`.
-   - Lakukan pemisahan teks spasi (`split(" ")`) untuk mengamankan string asli token. Jika gagal ekstrak token, lempar error `"unauthorized"`.
-5. Di dalam blok `try...catch`, panggil fungsi `logoutUser(token_yang_diekstrak)` dari servis yang telah Anda buat di Langkah 1.
-6. Apabila servis dieksekusi dengan baik, balas objek format JSON kepada klien `{ "data": hasil_kembalian_service_yaitu_OK }`.
-7. Jika ditangkap oleh blok `catch` atau gagal divalidasi, jadikan objek JSON bernilai `{ "error": "unauthorized" }` dan set HTTP status ditaruh pada posisi *401 Unauthorized* (misal `set.status = 401`). Kembalikan generic error 500 jika error yang dilempar bukan "unauthorized" untuk berjaga-jaga.
-
-### Langkah 4: Testing
-1. Hidupkan runtime local aplikasi server.
-2. Login sebagai pengguna untuk memperoleh token di proses login awal. 
-3. Hit `DELETE /api/users/logout` menggunakan token yang benar di header `Authorization: Bearer <token>`. Pastikan ia merespons sukses `{"data": "OK"}`.
-4. Segera cek database tabel `sessions`, pastikan record token tersebut sudah tuntas terhapus.
-5. Coba hit ulang profil `POST /api/users/current` menggunakan token yang baru saja dilogout tadi. Pastikan request ditolak (Unauthorized) karena session-nya sudah tidak ada di dalam database.
+### 4. Logout User (`DELETE /api/users/logout`)
+- **[Success]** Berhasil membatalkan token/logout menggunakan Bearer token yang valid (response OK).
+- **[Success]** Verifikasi Database: Setelah operasi logout berhasil, token terkait harus **sepenuhnya terhapus (tidak ada)** dari tabel `sessions`.
+- **[Error]** Proses logout gagal akibat tidak ada header Authorization (Status 401).
+- **[Error]** Akses ditolak saat mencoba logout dua kali berturut-turut *(Double Logout)* dengan token yang sama (Status 401 pada percobaan kedua karena token pertama kali sudah sukses terhapus).
