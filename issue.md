@@ -1,43 +1,71 @@
-# Issue: Implementasi Unit Test untuk Seluruh API
+# Issue: Tambahkan Fitur Dokumentasi Swagger (OpenAPI)
 
 ## Deskripsi Tugas
-Kita membutuhkan _test coverage_ yang komprehensif untuk seluruh endpoint API yang berjalan saat ini. Pengujian ini bertujuan untuk memastikan setiap endpoint berfungsi sesuai spesifikasi, baik pada skenario sukses (Happy Path) maupun pada skenario kegagalan (Error/Edge Cases).
+Agar spesifikasi API dapat digunakan, diuji, dan dibaca dengan mudah oleh pengguna maupun tim Frontend (bahkan pihak ketiga), aplikasi ini memerlukan sistem dokumentasi UI yang interaktif. Di ekosistem ElysiaJS, kita bisa mencapai ini sangat cepat menggunakan plugin resmi **Swagger**.
 
-Silakan implementasikan unit test menggunakan *test runner* bawaan dari Bun yaitu `bun test`.
-
----
-
-## Aturan Utama Pengujian
-1. **Lokasi File**: Seluruh file test harus diletakkan di dalam direktori `test/` pada root proyek (contoh: `test/users.test.ts`).
-2. **Isolasi Data (Konsistensi)**: Sebelum **setiap** skenario (atau sebelum block `describe` yang terkait), **WAJIB** membersihkan/menghapus data target di database secara terprogram (membersihkan isi tabel `users` dan `sessions`). Hal ini penting agar satu pengujian tidak diinterferensi oleh sisa data dari pengujian sebelumnya.
-3. Gunakan integrasi request dengan instance server Elysia atau langsung hit menggunakan HTTP request secara lokal ke aplikasi.
+Fitur ini akan secara otomatis membuat halaman web (seperti `/swagger`) di mana seluruh API Route beserta request body, parameter, dan status balasan akan terdokumentasi otomatis ke standar OpenAPI.
 
 ---
 
-## Daftar Skenario Pengujian yang Harus Dibuat
+## 1. Lokasi Aplikasi dan Target
+- **Plugin Tambahan**: `@elysiajs/swagger`
+- **Entry Point File**: `src/index.ts`
+- **URL Dokumentasi (Target)**: `http://localhost:3000/swagger`
 
-Berikut adalah rincian skenario yang wajib Anda tulis tesnya, jangan membuat implementasi kode dari saya, melainkan wujudkan langsung *assertions* berdasarkan daftar berikut:
+---
 
-### 1. Registrasi User (`POST /api/users`)
-- **[Success]** Berhasil melakukan registrasi dengan payload user yang valid (mengembalikan response `{"data": "OK"}`).
-- **[Error]** Gagal melakukan registrasi karena format body payload tidak valid (misalnya field `email` bukan format email yang benar).
-- **[Error]** Gagal melakukan registrasi karena email sudah terdaftar sebelumnya (menghasilkan status HTTP 400).
+## 2. Tahapan Implementasi (Step-by-Step)
 
-### 2. Login User (`POST /api/users/login`)
-- **[Success]** Berhasil login menggunakan email dan password yang valid (menghasilkan token berbasis UUID, status HTTP 200).
-- **[Success]** Verifikasi Database: Pastikan token yang dikembalikan dari login tersebut berhasil masuk ke tabel `sessions` dengan relasi `user_id` yang tepat.
-- **[Error]** Gagal login karena format email atau body rekues salah.
-- **[Error]** Gagal login karena email belum didaftarkan di sistem (status 401).
-- **[Error]** Gagal login karena pengguna memberikan kombinasi password yang salah (status 401).
+Anggap ini sebagai tutorial atau _checklist_ rincinya. Lakukan instalasi hingga uji integrasinya:
 
-### 3. Get Current User Profil (`POST /api/users/current`)
-- **[Success]** Berhasil membaca data profil pengguna dengan memasukkan Authorization header Bearer token yang valid (response mengandung `id`, `name`, `email`, dan `createdAt`, tetapi **HARUS dipastikan kolom `password` tidak bocor**).
-- **[Error]** Akses ditolak jika tidak membawa header `Authorization` sama sekali (status 401).
-- **[Error]** Akses ditolak karena Bearer token berformat salah atau menggunakan token sembarang/invalid (status 401).
-- **[Error]** Akses ditolak jika menggunakan string yang tampak seperti token UUID tetapi record-nya tidak dapat ditemukan/sudah tidak valid di tabel `sessions`.
+### Langkah 1: Instalasi Library
+Kita wajib menggunakan _framework plugin_ bawaan dari ekosistem pembuat Elysia itu sendiri agar 100% kompatibel dan ringan.
+- Jalankan perintah instalasi berikut di terminal (pastikan berada di dalam folder proyek utama):
+  ```bash
+  bun add @elysiajs/swagger
+  ```
 
-### 4. Logout User (`DELETE /api/users/logout`)
-- **[Success]** Berhasil membatalkan token/logout menggunakan Bearer token yang valid (response OK).
-- **[Success]** Verifikasi Database: Setelah operasi logout berhasil, token terkait harus **sepenuhnya terhapus (tidak ada)** dari tabel `sessions`.
-- **[Error]** Proses logout gagal akibat tidak ada header Authorization (Status 401).
-- **[Error]** Akses ditolak saat mencoba logout dua kali berturut-turut *(Double Logout)* dengan token yang sama (Status 401 pada percobaan kedua karena token pertama kali sudah sukses terhapus).
+### Langkah 2: Registrasikan Plugin ke Aplikasi Utama
+- Buka file *entry point* di `src/index.ts`.
+- Tambahkan baris impor _(import)_ untuk library yang baru saja kita instal di bagian paling atas:
+  ```typescript
+  import { swagger } from "@elysiajs/swagger";
+  ```
+- Cari variabel utama server yang mendefinisikan instance Elysia (misalnya `const app = new Elysia()` atau `export const app = new Elysia()`).
+- Daftarkan plugin Swagger dengan memanggil metode `use()` **sebelum** mendefinisikan router bawaan lainnya, seperti ini:
+  ```typescript
+  export const app = new Elysia()
+    .use(swagger({
+        documentation: {
+            info: {
+                title: 'Vibecoding Backend API',
+                version: '1.0.0',
+                description: 'Dokumentasi lengkap API Management User.'
+            }
+        }
+    }))
+    // ... lalu lanjutkan dengan app.use(usersRoute) dan route lainnya dibawahnya
+  ```
+_*(Penjelasan: Setting `documentation.info` di dalam argumen swagger bersifat opsional namun memberikan tampilan identitas web yang lebih estetik dan profesional ketimbang UI Polos).*_
+
+### Langkah 3: Penambahan Keterangan Endpoint (Opsional tapi Direkomendasikan)
+Elysia secara pintar membaca tipe validasi Typebox yang ada di _route parameter_ secara ajaib. Tetapi jika ingin mempercantik UI, masuklah ke file route misal `src/routes/users-route.ts`.
+- Di setiap parameter argumen (di mana blok validasi `t.Object` berada), tambahkan properti `detail: { summary: "Fungsi x", tags: ["Users"] }`.
+- Contoh penerapan kasarnya (opsional):
+  ```typescript
+  {
+      body: t.Object({ ... }),
+      detail: { 
+          summary: 'Mendaftarkan User Baru', 
+          tags: ['Authentication'] 
+      }
+  }
+  ```
+  Langkah 3 ini bisa di-skip jika Anda ingin implementasi _bare minimum_ terlebih dahulu.
+
+### Langkah 4: Testing & Verifikasi
+1. Pastikan tidak ada error Type pada Typescript.
+2. Jalankan aplikasi seperti biasa dengan menjalankan skrip eksekusi lokal: `bun run src/index.ts`.
+3. Buka browser dan pergi ke tautan uji fungsi: **http://localhost:3000/swagger**.
+4. Verifikasi bahwa Anda melihat tampilan _User Interface_ (UI) khas Swagger UI abu-abu/hijau.
+5. Coba salah satu tombol test endpoint "Try it out" untuk memastikan request API dari Swagger bisa merespons data yang semestinya dikembalikan backend.

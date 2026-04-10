@@ -20,6 +20,10 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
       email: t.String({ format: "email" }),
       password: t.String(),
     }),
+    detail: {
+      tags: ["User"],
+      summary: "Mendaftarkan pengguna baru ke sistem",
+    },
   })
   .post(
     "/login",
@@ -41,6 +45,10 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
         email: t.String({ format: "email" }),
         password: t.String(),
       }),
+      detail: {
+        tags: ["User"],
+        summary: "Melakukan login untuk mendapatkan session token",
+      },
     }
   )
   .onError(({ error, set }) => {
@@ -62,30 +70,50 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
         }
         return { token };
       })
-      .post("/current", async ({ token, set }) => {
-        try {
-          const data = await getCurrentUser(token);
-          return { data };
-        } catch (error: any) {
-          if (error.message === "unauthorized") {
-            set.status = 401;
-            return { error: error.message };
+      .post(
+        "/current",
+        async ({ token, set }) => {
+          try {
+            const data = await getCurrentUser(token);
+            return { data };
+          } catch (error: any) {
+            if (error.message === "unauthorized") {
+              set.status = 401;
+              return { error: error.message };
+            }
+            set.status = 500;
+            return { error: "Internal Server Error" };
           }
-          set.status = 500;
-          return { error: "Internal Server Error" };
+        },
+        {
+          detail: {
+            tags: ["User"],
+            summary: "Mendapatkan profil data user yang sedang login",
+            security: [{ bearerAuth: [] }],
+          },
         }
-      })
-      .delete("/logout", async ({ token, set }) => {
-        try {
-          const data = await logoutUser(token);
-          return { data };
-        } catch (error: any) {
-          if (error.message === "unauthorized") {
-            set.status = 401;
-            return { error: error.message };
+      )
+      .delete(
+        "/logout",
+        async ({ token, set }) => {
+          try {
+            const data = await logoutUser(token);
+            return { data };
+          } catch (error: any) {
+            if (error.message === "unauthorized") {
+              set.status = 401;
+              return { error: error.message };
+            }
+            set.status = 500;
+            return { error: "Internal Server Error" };
           }
-          set.status = 500;
-          return { error: "Internal Server Error" };
+        },
+        {
+          detail: {
+            tags: ["User"],
+            summary: "Menghapus session token (Logout)",
+            security: [{ bearerAuth: [] }],
+          },
         }
-      })
+      )
   );

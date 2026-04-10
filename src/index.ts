@@ -2,8 +2,21 @@ import { Elysia } from "elysia";
 import { db } from "./db";
 import { users } from "./db/schema";
 import { usersRoute } from "./routes/users-route";
+import { swagger } from "@elysiajs/swagger";
 
 export const app = new Elysia()
+  .use(swagger({
+    documentation: {
+      info: {
+        title: 'Vibecoding Backend API',
+        description: 'Pusat Dokumentasi API Management User',
+        version: '1.0.0'
+      },
+      tags: [
+        { name: 'User', description: 'Endpoint penanganan profil dan otentikasi' }
+      ]
+    }
+  }))
   .use(usersRoute)
   .get("/", () => "Hello from Bun + Elysia + Drizzle!")
   .get("/health", async () => {
